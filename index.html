@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlimsyFishes</title>
+    <title>FlimsyFishing</title>
     <style>
         * {
             box-sizing: border-box;
@@ -37,14 +37,32 @@
             background: rgba(0, 0, 0, 0.4);
             padding: 10px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: bold;
-            font-size: 1.1rem;
+            flex-direction: column;
+            gap: 4px;
             z-index: 10;
         }
-        .money { color: #fed330; text-shadow: 1px 1px #000; }
-        .rod-info { font-size: 0.85rem; opacity: 0.9; }
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .game-title {
+            font-size: 1.2rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            color: #ff7675;
+            text-shadow: 1px 1px 2px #000;
+        }
+        .money { color: #fed330; text-shadow: 1px 1px #000; font-weight: bold; font-size: 1.1rem; }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            opacity: 0.9;
+            background: rgba(0,0,0,0.2);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
 
         /* Scenery Area */
         #scenery {
@@ -167,7 +185,7 @@
             font-size: 0.8rem;
         }
         
-        /* Navigation/Tabs Shop & Log */
+        /* Navigation/Tabs Layout */
         #nav-tabs {
             display: flex;
             background: #2c3e50;
@@ -178,7 +196,7 @@
             background: none;
             border: none;
             color: #bdc3c7;
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             font-weight: bold;
             cursor: pointer;
         }
@@ -188,14 +206,14 @@
             border-top: 3px solid #00cec9;
         }
         #panel-content {
-            height: 200px;
+            height: 220px;
             background: #1e272e;
             overflow-y: auto;
             padding: 10px;
             border-top: 2px solid #2c3e50;
         }
 
-        /* Shop & Grid Elements */
+        /* Items List Configurations */
         .shop-item {
             display: flex;
             justify-content: space-between;
@@ -238,14 +256,29 @@
             font-size: 0.85rem;
             border-bottom: 1px dashed #57606f;
         }
+        .shop-section-header {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #00cec9;
+            background: #2c3e50;
+            padding: 4px 8px;
+            margin: 8px 0 4px 0;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
 
 <div id="game-container">
     <header>
-        <div>💰 <span id="money-display" class="money">0</span></div>
-        <div class="rod-info">🎣 <span id="rod-display">Basic Twig</span></div>
+        <div class="header-row">
+            <div class="game-title">FlimsyFishing</div>
+            <div>💰 <span id="money-display" class="money">0</span></div>
+        </div>
+        <div class="status-bar">
+            <div>🎣 <span id="rod-display">Basic Twig</span></div>
+            <div>🪱 <span id="bait-display">Lawn Grubs (∞)</span></div>
+        </div>
     </header>
 
     <div id="scenery">
@@ -270,7 +303,8 @@
     </div>
 
     <div id="nav-tabs">
-        <button class="tab-btn active" id="tab-shop" onclick="switchTab('shop')">SHOP</button>
+        <button class="tab-btn active" id="tab-shop" onclick="switchTab('shop')">GEAR SHOP</button>
+        <button class="tab-btn" id="tab-bait" onclick="switchTab('bait')">BAIT SHOP</button>
         <button class="tab-btn" id="tab-log" onclick="switchTab('log')">CATCH LOG</button>
         <button class="tab-btn" id="tab-index" onclick="switchTab('index')">FISH INDEX</button>
     </div>
@@ -282,6 +316,8 @@
     let gameState = {
         money: 0,
         currentRodIndex: 0,
+        currentBaitId: 'default',
+        baitInventory: { 'default': Infinity },
         status: 'idle',
         catchLog: [],
         discoveredFish: {},
@@ -299,7 +335,6 @@
         SECRET:    { name: 'Secret',    color: '#fd79a8', mult: 100.0, chance: 0.5 }
     };
 
-    // VASTLY EXPANDED BASE FISH roster (75 unique types)
     const BASE_FISH = [
         "Bass", "Cod", "Trout", "Salmon", "Mackerel", "Tuna", "Carp", "Eel", 
         "Catfish", "Perch", "Flounder", "Snapper", "Halibut", "Haddock", "Sunfish",
@@ -314,7 +349,6 @@
         "Lionfish", "Scorpionfish", "Stonefish"
     ];
 
-    // EXPANDED MUTATIONS (33 unique types)
     const MUTATIONS = [
         { name: "Glowing", valueAdd: 10, mult: 1.2 },
         { name: "Three-Eyed", valueAdd: 15, mult: 1.3 },
@@ -351,13 +385,75 @@
         { name: "Prismatic", valueAdd: 130, mult: 3.5 }
     ];
 
-    // BALANCED RODS: Costs significantly higher; upgrades provide very small advantages over the fast base mechanics
     const RODS = [
         { name: "Basic Twig", cost: 0, zoneSize: 14, speed: 4.5, color: "#cd84f1", length: 45, thick: 3 },
         { name: "Fiberglass Pole", cost: 5000, zoneSize: 15, speed: 4.3, color: "#ffb8b8", length: 55, thick: 4 },
         { name: "Carbon Fiber Reel", cost: 45000, zoneSize: 16, speed: 4.1, color: "#3d3d3d", length: 65, thick: 4.5 },
         { name: "Titanium Quantum Rod", cost: 350000, zoneSize: 17, speed: 3.9, color: "#18dcff", length: 75, thick: 5 },
         { name: "Plasma Void Caster", cost: 1500000, zoneSize: 18, speed: 3.7, color: "#ff3838", length: 85, thick: 6 }
+    ];
+
+    // OVER 50 UNIQUE BAITS DETAILED DATABASE (52 Total variants)
+    const BAITS = [
+        { id: 'default', name: 'Lawn Grubs', cost: 0, count: 1, mult: 1.0, type: 'Insects' },
+        // --- Tier 1: Ground Insects ---
+        { id: 'b1', name: 'Red Wiggler', cost: 20, count: 5, mult: 1.1, type: 'Insects' },
+        { id: 'b2', name: 'Mealworm Crunch', cost: 45, count: 5, mult: 1.2, type: 'Insects' },
+        { id: 'b3', name: 'Fat Nightcrawler', cost: 80, count: 5, mult: 1.3, type: 'Insects' },
+        { id: 'b4', name: 'Cricket Leg', cost: 110, count: 5, mult: 1.4, type: 'Insects' },
+        { id: 'b5', name: 'Waxworm Pod', cost: 150, count: 5, mult: 1.5, type: 'Insects' },
+        { id: 'b6', name: 'Stinkbug Shell', cost: 190, count: 5, mult: 1.6, type: 'Insects' },
+        { id: 'b7', name: 'Cicada Husk', cost: 240, count: 5, mult: 1.7, type: 'Insects' },
+        { id: 'b8', name: 'Centipede Segment', cost: 300, count: 5, mult: 1.8, type: 'Insects' },
+        { id: 'b9', name: 'Locust Scent', cost: 380, count: 5, mult: 1.9, type: 'Insects' },
+        { id: 'b10', name: 'Beetle Mandible', cost: 480, count: 5, mult: 2.0, type: 'Insects' },
+        { id: 'b11', name: 'Leech clusters', cost: 600, count: 5, mult: 2.1, type: 'Insects' },
+        { id: 'b12', name: 'Hornet Larvae', cost: 750, count: 5, mult: 2.2, type: 'Insects' },
+        { id: 'b13', name: 'Scorpion Tail', cost: 950, count: 5, mult: 2.4, type: 'Insects' },
+
+        // --- Tier 2: Marine Organics ---
+        { id: 'b14', name: 'Minnow Tail', cost: 1200, count: 5, mult: 2.6, type: 'Marine' },
+        { id: 'b15', name: 'Sand Flea Bag', cost: 1500, count: 5, mult: 2.8, type: 'Marine' },
+        { id: 'b16', name: 'Brine Shrimp Paste', cost: 1900, count: 5, mult: 3.0, type: 'Marine' },
+        { id: 'b17', name: 'Crushed Clam Shell', cost: 2400, count: 5, mult: 3.2, type: 'Marine' },
+        { id: 'b18', name: 'Squid Tentacle', cost: 3000, count: 5, mult: 3.5, type: 'Marine' },
+        { id: 'b19', name: 'Fiddler Crab Egg', cost: 3800, count: 5, mult: 3.8, type: 'Marine' },
+        { id: 'b20', name: 'Lugworm Oil', cost: 4800, count: 5, mult: 4.1, type: 'Marine' },
+        { id: 'b21', name: 'Mullet Filet Chunk', cost: 6000, count: 5, mult: 4.4, type: 'Marine' },
+        { id: 'b22', name: 'Urchin Roe Spice', cost: 7500, count: 5, mult: 4.7, type: 'Marine' },
+        { id: 'b23', name: 'Octopus Sucker', cost: 9500, count: 5, mult: 5.0, type: 'Marine' },
+        { id: 'b24', name: 'Crayfish Claws', cost: 12000, count: 5, mult: 5.4, type: 'Marine' },
+        { id: 'b25', name: 'Eel Slime Jelly', cost: 15000, count: 5, mult: 5.8, type: 'Marine' },
+        { id: 'b26', name: 'Jellyfish Stinger', cost: 19000, count: 5, mult: 6.2, type: 'Marine' },
+
+        // --- Tier 3: Synthetic & Chemical Compounds ---
+        { id: 'b27', name: 'Neon Dough Bead', cost: 24000, count: 5, mult: 6.6, type: 'Synthetic' },
+        { id: 'b28', name: 'Glitter Gel Vial', cost: 30000, count: 5, mult: 7.0, type: 'Synthetic' },
+        { id: 'b29', name: 'Scented Pellet Tub', cost: 38000, count: 5, mult: 7.5, type: 'Synthetic' },
+        { id: 'b30', name: 'Pheromone spray', cost: 48000, count: 5, mult: 8.0, type: 'Synthetic' },
+        { id: 'b31', name: 'Fluorescent Grub', cost: 60000, count: 5, mult: 8.5, type: 'Synthetic' },
+        { id: 'b32', name: 'Magnetic Bead Blend', cost: 75000, count: 5, mult: 9.0, type: 'Synthetic' },
+        { id: 'b33', name: 'Sonic Micro-Vibe', cost: 95000, count: 5, mult: 9.6, type: 'Synthetic' },
+        { id: 'b34', name: 'Battery Acid Pop', cost: 120000, count: 5, mult: 10.2, type: 'Synthetic' },
+        { id: 'b35', name: 'Glowstick Extract', cost: 150000, count: 5, mult: 11.0, type: 'Synthetic' },
+        { id: 'b36', name: 'Cyber-Chum Core', cost: 190000, count: 5, mult: 12.0, type: 'Synthetic' },
+        { id: 'b37', name: 'Uranium Pellet Wash', cost: 240000, count: 5, mult: 13.2, type: 'Synthetic' },
+        { id: 'b38', name: 'Fusion Catalyst Bait', cost: 300000, count: 5, mult: 14.5, type: 'Synthetic' },
+        { id: 'b39', name: 'Quantum Foam Swab', cost: 380000, count: 5, mult: 16.0, type: 'Synthetic' },
+
+        // --- Tier 4: Eldritch & Cosmic ---
+        { id: 'b40', name: 'Rotting Meteor Shard', cost: 450000, count: 3, mult: 18.0, type: 'Cosmic' },
+        { id: 'b41', name: 'Singularity Flake', cost: 550000, count: 3, mult: 20.0, type: 'Cosmic' },
+        { id: 'b42', name: 'Wormhole Specimen', cost: 680000, count: 3, mult: 22.5, type: 'Cosmic' },
+        { id: 'b43', name: 'Shoggoth Membrane', cost: 820000, count: 3, mult: 25.0, type: 'Cosmic' },
+        { id: 'b44', name: 'Cthulhu Ooze Spore', cost: 980000, count: 3, mult: 28.0, type: 'Cosmic' },
+        { id: 'b45', name: 'Astral Eye Node', cost: 1150000, count: 3, mult: 32.0, type: 'Cosmic' },
+        { id: 'b46', name: 'Nebula Gas Capsule', cost: 1350000, count: 3, mult: 36.5, type: 'Cosmic' },
+        { id: 'b47', name: 'Plasma Cluster Root', cost: 1600000, count: 3, mult: 42.0, type: 'Cosmic' },
+        { id: 'b48', name: 'Supernova Ash Dust', cost: 1900000, count: 3, mult: 48.0, type: 'Cosmic' },
+        { id: 'b49', name: 'Rift Matter Thread', cost: 2250000, count: 3, mult: 55.0, type: 'Cosmic' },
+        { id: 'b50', name: 'Void Tendril Root', cost: 2700000, count: 3, mult: 65.0, type: 'Cosmic' },
+        { id: 'b51', name: 'Anti-Matter Kernel', cost: 3300000, count: 3, mult: 80.0, type: 'Cosmic' }
     ];
 
     let minigameData = {
@@ -394,13 +490,11 @@
         let dockY = h * 0.75;
         let dockWidth = w * 0.45;
 
-        // Draw Dock
         ctx.fillStyle = "#8c7ae6";
         ctx.fillRect(0, dockY, dockWidth, 20);
         ctx.fillStyle = "#482ff7";
         ctx.fillRect(0, dockY + 20, dockWidth, 8);
 
-        // Draw Player Character Model: Human Stick Figure
         let pX = dockWidth - 60; 
         let pY = dockY;
 
@@ -408,24 +502,17 @@
         ctx.lineWidth = 3;
         ctx.lineCap = "round";
 
-        // Legs
         ctx.beginPath(); ctx.moveTo(pX - 6, pY); ctx.lineTo(pX - 6, pY - 24); ctx.stroke(); 
         ctx.beginPath(); ctx.moveTo(pX + 6, pY); ctx.lineTo(pX + 6, pY - 24); ctx.stroke(); 
-
-        // Main Spine/Torso Line
         ctx.beginPath(); ctx.moveTo(pX, pY - 24); ctx.lineTo(pX, pY - 56); ctx.stroke();
-
-        // Arms
         ctx.beginPath(); ctx.moveTo(pX, pY - 48); ctx.lineTo(pX + 16, pY - 42); ctx.stroke();
 
-        // Head
         ctx.fillStyle = "#ffdd59";
         ctx.beginPath();
         ctx.arc(pX, pY - 66, 10, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
-        // Dynamic Fishing Rod Model
         let currentRod = RODS[gameState.currentRodIndex];
         let rodOriginX = pX + 14;
         let rodOriginY = pY - 42;
@@ -441,7 +528,6 @@
         ctx.lineTo(tipX, tipY);
         ctx.stroke();
 
-        // Fishing Line Configuration
         ctx.strokeStyle = "rgba(236, 240, 241, 0.7)";
         ctx.lineWidth = 1.2;
         ctx.beginPath();
@@ -514,6 +600,7 @@
         actionBtn.className = "biting";
 
         biteTimeout = setTimeout(() => {
+            consumeBaitUnit(); // Consumes bait when missing the bite window
             resetToIdle("Missed!");
         }, 1300);
     }
@@ -565,11 +652,24 @@
         document.getElementById('minigame-container').style.display = 'none';
 
         let pos = minigameData.indicatorPos;
+        consumeBaitUnit(); // Bait consumed on pull attempts
+        
         if (pos >= minigameData.targetStart && pos <= minigameData.targetEnd) {
             generateFish();
         } else {
             resetToIdle("Missed!");
         }
+    }
+
+    function consumeBaitUnit() {
+        if (gameState.currentBaitId !== 'default') {
+            gameState.baitInventory[gameState.currentBaitId]--;
+            if (gameState.baitInventory[gameState.currentBaitId] <= 0) {
+                delete gameState.baitInventory[gameState.currentBaitId];
+                gameState.currentBaitId = 'default';
+            }
+        }
+        updateUI();
     }
 
     // --- PROCEDURAL GENERATOR ---
@@ -611,7 +711,10 @@
 
         gameState.discoveredFish[baseName] = true;
 
-        let finalValue = Math.floor((baseValue + flatAddition) * rarity.mult * mutationMultiplier);
+        // Apply dynamic calculation multiplier values based on active equipped Bait
+        let equippedBaitObj = BAITS.find(b => b.id === gameState.currentBaitId) || BAITS[0];
+        let finalValue = Math.floor((baseValue + flatAddition) * rarity.mult * mutationMultiplier * equippedBaitObj.mult);
+        
         let mutationPrefix = activeMutations.map(m => m.name).join("-");
         let fullName = mutationPrefix ? `${mutationPrefix} ${baseName}` : baseName;
 
@@ -662,12 +765,18 @@
     function updateUI() {
         document.getElementById('money-display').innerText = gameState.money;
         document.getElementById('rod-display').innerText = RODS[gameState.currentRodIndex].name;
+        
+        let equippedBaitObj = BAITS.find(b => b.id === gameState.currentBaitId) || BAITS[0];
+        let currentBaitQty = gameState.baitInventory[gameState.currentBaitId];
+        document.getElementById('bait-display').innerText = `${equippedBaitObj.name} (${currentBaitQty === Infinity ? '∞' : currentBaitQty})`;
+        
         renderPanel();
     }
 
     function switchTab(tab) {
         activeTab = tab;
         document.getElementById('tab-shop').classList.toggle('active', tab === 'shop');
+        document.getElementById('tab-bait').classList.toggle('active', tab === 'bait');
         document.getElementById('tab-log').classList.toggle('active', tab === 'log');
         document.getElementById('tab-index').classList.toggle('active', tab === 'index');
         renderPanel();
@@ -685,7 +794,7 @@
                 
                 let itemDiv = document.createElement('div');
                 itemDiv.className = 'shop-item';
-                let infoText = `<strong>${rod.name}</strong><br><span style="font-size:0.72rem; color:#aaa;">Slightly wider green catch window</span>`;
+                let infoText = `<strong>${rod.name}</strong><br><span style="font-size:0.72rem; color:#aaa;">Slightly wider catch window</span>`;
                 let actionItem = '';
 
                 if (isOwned) {
@@ -699,6 +808,38 @@
                 }
                 itemDiv.innerHTML = `<div>${infoText}</div><div>${actionItem}</div>`;
                 container.appendChild(itemDiv);
+            });
+
+        } else if (activeTab === 'bait') {
+            let sections = ['Insects', 'Marine', 'Synthetic', 'Cosmic'];
+            
+            sections.forEach(secName => {
+                let secHeader = document.createElement('div');
+                secHeader.className = 'shop-section-header';
+                secHeader.innerText = `${secName.toUpperCase()} CLASSIFICATION BAITS`;
+                container.appendChild(secHeader);
+
+                let filtered = BAITS.filter(b => b.type === secName);
+                filtered.forEach(bait => {
+                    let itemDiv = document.createElement('div');
+                    itemDiv.className = 'shop-item';
+                    
+                    let qtyOwned = gameState.baitInventory[bait.id] || 0;
+                    let isEquipped = gameState.currentBaitId === bait.id;
+                    let canAfford = gameState.money >= bait.cost;
+
+                    let infoText = `<strong>${bait.name}</strong> [x${bait.count}]<br><span style="font-size:0.7rem; color:#fed330;">Value Mult: x${bait.mult.toFixed(1)}</span> <span style="font-size:0.7rem; color:#aaa;">(Stock: ${qtyOwned})</span>`;
+                    
+                    let actionItem = `<button class="buy-btn" ${!canAfford ? 'disabled' : ''} onclick="buyBait('${bait.id}', ${bait.cost}, ${bait.count})">$${bait.cost.toLocaleString()}</button>`;
+                    if (isEquipped && bait.id !== 'default') {
+                        actionItem = `<div style="display:flex; flex-direction:column; gap:2px;"><span style="color:#2ecc71; font-weight:bold; font-size:0.75rem; text-align:center;">Active</span><button class="buy-btn" style="padding:2px 6px; font-size:0.65rem; background:#34495e;" ${!canAfford ? 'disabled' : ''} onclick="buyBait('${bait.id}', ${bait.cost}, ${bait.count})">+Buy</button></div>`;
+                    } else if (qtyOwned > 0 && bait.id !== 'default') {
+                        actionItem = `<div style="display:flex; flex-direction:column; gap:2px;"><button class="buy-btn" style="background:#3498db; padding:4px 8px; font-size:0.75rem;" onclick="equipBait('${bait.id}')">Equip</button><button class="buy-btn" style="padding:2px 6px; font-size:0.65rem; background:#34495e;" ${!canAfford ? 'disabled' : ''} onclick="buyBait('${bait.id}', ${bait.cost}, ${bait.count})">+Buy</button></div>`;
+                    }
+
+                    itemDiv.innerHTML = `<div>${infoText}</div><div>${actionItem}</div>`;
+                    container.appendChild(itemDiv);
+                });
             });
 
         } else if (activeTab === 'log') {
@@ -766,8 +907,28 @@
         }
     }
 
+    function buyBait(id, cost, count) {
+        if (gameState.money >= cost) {
+            gameState.money -= cost;
+            if (!gameState.baitInventory[id]) {
+                gameState.baitInventory[id] = 0;
+            }
+            gameState.baitInventory[id] += count;
+            gameState.currentBaitId = id; // Auto-equips upon purchase
+            updateUI();
+        }
+    }
+
+    function equipBait(id) {
+        if (gameState.baitInventory[id] > 0) {
+            gameState.currentBaitId = id;
+            updateUI();
+        }
+    }
+
     updateUI();
 </script>
 </body>
+</html>
 </html>
   
