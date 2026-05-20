@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mutation Dock Fishing</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1a2634;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            width: 100%;
+            max-width: 450px;
+            height: 100%;
+            background: linear-gradient(to bottom, #74b9ff 0%, #0984e3 50%, #00cec9 100%);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        /* Top UI */
+        header {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            z-index: 10;
+        }
+        .money { color: #fed330; text-shadow: 1px 1px #000; }
+        .rod-info { font-size: 0.85rem; opacity: 0.9; }
+
+        /* Scenery Area */
+        #scenery {
+            flex: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #dock {
+            position: absolute;
+            bottom: 20%;
+            left: 0;
+            width: 40%;
+            height: 20px;
+            background: #8c7ae6;
+            border-bottom: 8px solid #482ff7;
+            border-radius: 0 5px 5px 0;
+        }
+        #fisherman {
+            position: absolute;
+            bottom: calc(20% + 20px);
+            left: 20px;
+            font-size: 2rem;
+        }
+        #water-effects {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 20%;
+            background: rgba(0, 206, 201, 0.4);
+            animation: ripple 2s infinite ease-in-out;
+        }
+        @keyframes ripple {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(5px); }
+        }
+
+        /* Interaction Central Button */
+        #action-btn {
+            position: absolute;
+            bottom: 25%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            border: 4px solid #fff;
+            background: #ff7675;
+            color: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+            box-shadow: 0 6px 0 #d63031, 0 10px 20px rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.1s;
+            z-index: 5;
+        }
+        #action-btn:active {
+            transform: translateX(-50%) translateY(4px);
+            box-shadow: 0 2px 0 #d63031, 0 5px 10px rgba(0,0,0,0.3);
+        }
+        #action-btn.waiting { background: #fdcb6e; box-shadow: 0 6px 0 #e17055; }
+        #action-btn.biting { background: #2ecc71; box-shadow: 0 6px 0 #27ae60; animation: pulse 0.4s infinite; }
+        @keyframes pulse {
+            0% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.1); }
+            100% { transform: translateX(-50%) scale(1); }
+        }
+
+        /* Minigame Bar */
+        #minigame-container {
+            position: absolute;
+            top: 30%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 30px;
+            background: #333;
+            border: 3px solid #fff;
+            border-radius: 15px;
+            overflow: hidden;
+            display: none;
+            z-index: 10;
+        }
+        #target-zone {
+            position: absolute;
+            height: 100%;
+            background: #2ecc71;
+        }
+        #indicator {
+            position: absolute;
+            width: 8px;
+            height: 100%;
+            background: #ff7675;
+            box-shadow: 0 0 5px #000;
+            left: 0;
+        }
+
+        /* Catch Display / Modals */
+        .modal {
+            position: absolute;
+            top: 15%;
+            left: 5%;
+            width: 90%;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #fff;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            display: none;
+            z-index: 20;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+        .rarity-tag {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+        
+        /* Navigation/Tabs Shop & Log */
+        #nav-tabs {
+            display: flex;
+            background: #2c3e50;
+            height: 50px;
+        }
+        .tab-btn {
+            flex: 1;
+            background: none;
+            border: none;
+            color: #bdc3c7;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .tab-btn.active {
+            color: #fff;
+            background: rgba(255,255,255,0.1);
+            border-top: 3px solid #00cec9;
+        }
+        #panel-content {
+            height: 180px;
+            background: #1e272e;
+            overflow-y: auto;
+            padding: 10px;
+            border-top: 2px solid #2c3e50;
+        }
+
+        /* Shop Elements */
+        .shop-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #2f3640;
+            padding: 8px;
+            margin-bottom: 6px;
+            border-radius: 5px;
+        }
+        .buy-btn {
+            background: #2ecc71;
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .buy-btn:disabled { background: #7f8c8d; }
+
+        /* Status Ticker */
+        #ticker {
+            font-size: 0.9rem;
+            color: #f1c40f;
+            text-align: center;
+            font-style: italic;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <header>
+        <div>💰 <span id="money-display" class="money">0</span></div>
+        <div class="rod-info">🎣 <span id="rod-display">Basic Twig</span></div>
+    </header>
+
+    <div id="scenery">
+        <div id="fisherman">🥶🕺</div>
+        <div id="dock"></div>
+        <div id="water-effects"></div>
+        
+        <button id="action-btn">CAST</button>
+
+        <div id="minigame-container">
+            <div id="target-zone"></div>
+            <div id="indicator"></div>
+        </div>
+
+        <div id="catch-modal" class="modal">
+            <div id="catch-rarity" class="rarity-tag">COMMON</div>
+            <h2 id="catch-name" style="margin: 5px 0;">Three-Eyed Bass</h2>
+            <p id="catch-mutations" style="color: #00cec9; font-size: 0.85rem;"></p>
+            <p style="font-size: 1.2rem; color: #fed330; margin: 10px 0;">Value: $<span id="catch-value">0</span></p>
+            <button onclick="closeCatchModal()" style="padding: 8px 20px; font-weight:bold; background:#0984e3; border:none; color:white; border-radius:5px;">Keep & Sell</button>
+        </div>
+    </div>
+
+    <div id="nav-tabs">
+        <button class="tab-btn active" onclick="switchTab('shop')">SHOP</button>
+        <button class="tab-btn" onclick="switchTab('log')">CATCH LOG</button>
+    </div>
+    <div id="panel-content">
+        </div>
+</div>
+
+<script>
+    // --- GAME DATA ---
+    let gameState = {
+        money: 0,
+        currentRodIndex: 0,
+        status: 'idle', // idle, waiting, biting, minigame
+        catchLog: []
+    };
+
+    const RARITIES = {
+        COMMON:    { name: 'Common',    color: '#7f8c8d', mult: 1.0,  chance: 45 },
+        UNCOMMON:  { name: 'Uncommon',  color: '#2ecc71', mult: 1.5,  chance: 25 },
+        GOOD:      { name: 'Good',      color: '#3498db', mult: 2.2,  chance: 15 },
+        RARE:      { name: 'Rare',      color: '#9b59b6', mult: 3.5,  chance: 9 },
+        LEGENDARY: { name: 'Legendary', color: '#f1c40f', mult: 6.0,  chance: 4 },
+        MYTHIC:    { name: 'Mythic',    color: '#e67e22', mult: 12.0, chance: 1.5 },
+        EXOTIC:    { name: 'Exotic',    color: '#e74c3c', mult: 25.0, chance: 0.4 },
+        SECRET:    { name: 'Secret',    color: '#fd79a8', mult: 75.0, chance: 0.1 }
+    };
+
+    const BASE_FISH = [
+        "Bass", "Cod", "Trout", "Salmon", "Mackerel", "Tuna", "Carp", "Eel", 
+        "Catfish", "Perch", "Flounder", "Snapper", "Halibut", "Haddock", "Sunfish"
+    ];
+
+    const MUTATIONS = [
+        { name: "Glowing", valueAdd: 10, mult: 1.2 },
+        { name: "Three-Eyed", valueAdd: 15, mult: 1.3 },
+        { name: "Radioactive", valueAdd: 30, mult: 1.6 },
+        { name: "Tentacled", valueAdd: 20, mult: 1.4 },
+        { name: "Metallic", valueAdd: 25, mult: 1.5 },
+        { name: "Transparent", valueAdd: 40, mult: 1.8 },
+        { name: "Winged", valueAdd: 35, mult: 1.7 },
+        { name: "Zombie", valueAdd: 15, mult: 1.2 },
+        { name: "Crystalline", valueAdd: 50, mult: 2.0 },
+        { name: "Microscopic", valueAdd: 5, mult: 0.9 },
+        { name: "Colossal", valueAdd: 60, mult: 2.2 },
+        { name: "Cybernetic", valueAdd: 70, mult: 2.5 },
+        { name: "Void-Touched", valueAdd: 100, mult: 3.0 }
+    ];
+
+    const RODS = [
+        { name: "Basic Twig", cost: 0, zoneSize: 18, speed: 2.5 },
+        { name: "Fiberglass Pole", cost: 150, zoneSize: 26, speed: 2.2 },
+        { name: "Carbon Fiber Reel", cost: 600, zoneSize: 34, speed: 1.8 },
+        { name: "Titanium Quantum Rod", cost: 2000, zoneSize: 45, speed: 1.5 },
+        { name: "Plasma Void Caster", cost: 7500, zoneSize: 60, speed: 1.1 }
+    ];
+
+    // --- MINIGAME VARIABLES ---
+    let minigameData = {
+        indicatorPos: 0,
+        direction: 1,
+        targetStart: 0,
+        targetEnd: 0,
+        speed: 2,
+        animationFrame: null
+    };
+    
+    let biteTimeout = null;
+    let generatedCatch = null;
+    let activeTab = 'shop';
+
+    // --- CORE LOGIC ---
+    const actionBtn = document.getElementById('action-btn');
+    
+    // Combined touch/click utility for lag-free mobile response
+    ['touchstart', 'mousedown'].forEach(evtType => {
+        actionBtn.addEventListener(evtType, function(e) {
+            e.preventDefault();
+            handleAction();
+        });
+    });
+
+    function handleAction() {
+        if (gameState.status === 'idle') {
+            startCasting();
+        } else if (gameState.status === 'waiting') {
+            // Reeled early!
+            clearTimeout(biteTimeout);
+            resetToIdle("Reeled in too early!");
+        } else if (gameState.status === 'biting') {
+            startMinigame();
+        } else if (gameState.status === 'minigame') {
+            checkMinigameResult();
+        }
+    }
+
+    function startCasting() {
+        gameState.status = 'waiting';
+        actionBtn.innerText = "WAITING";
+        actionBtn.className = "waiting";
+        
+        // Random wait time between 1.5 and 4.5 seconds
+        let waitTime = 1500 + Math.random() * 3000;
+        biteTimeout = setTimeout(() => {
+            triggerBite();
+        }, waitTime);
+    }
+
+    function triggerBite() {
+        gameState.status = 'biting';
+        actionBtn.innerText = "HOOK!";
+        actionBtn.className = "biting";
+
+        // Give player 1.2 seconds to tap/click when it bites
+        biteTimeout = setTimeout(() => {
+            resetToIdle("The fish got away!");
+        }, 1200);
+    }
+
+    function startMinigame() {
+        clearTimeout(biteTimeout);
+        gameState.status = 'minigame';
+        actionBtn.innerText = "PULL!";
+        actionBtn.className = "";
+
+        // Setup Minigame Parameters based on Current Fishing Rod
+        const currentRod = RODS[gameState.currentRodIndex];
+        const minigameBar = document.getElementById('minigame-container');
+        const targetZone = document.getElementById('target-zone');
+        
+        minigameBar.style.display = 'block';
+        
+        // Determine random target zone position
+        let zoneWidth = currentRod.zoneSize; // Percentage width
+        minigameData.targetStart = Math.random() * (100 - zoneWidth);
+        minigameData.targetEnd = minigameData.targetStart + zoneWidth;
+        
+        targetZone.style.left = minigameData.targetStart + '%';
+        targetZone.style.width = zoneWidth + '%';
+        
+        minigameData.indicatorPos = 0;
+        minigameData.direction = 1;
+        minigameData.speed = currentRod.speed;
+
+        animateMinigame();
+    }
+
+    function animateMinigame() {
+        if (gameState.status !== 'minigame') return;
+
+        minigameData.indicatorPos += minigameData.speed * minigameData.direction;
+        if (minigameData.indicatorPos >= 100) {
+            minigameData.indicatorPos = 100;
+            minigameData.direction = -1;
+        } else if (minigameData.indicatorPos <= 0) {
+            minigameData.indicatorPos = 0;
+            minigameData.direction = 1;
+        }
+
+        document.getElementById('indicator').style.left = minigameData.indicatorPos + '%';
+        minigameData.animationFrame = requestAnimationFrame(animateMinigame);
+    }
+
+    function checkMinigameResult() {
+        cancelAnimationFrame(minigameData.animationFrame);
+        document.getElementById('minigame-container').style.display = 'none';
+
+        let pos = minigameData.indicatorPos;
+        if (pos >= minigameData.targetStart && pos <= minigameData.targetEnd) {
+            generateFish();
+        } else {
+            resetToIdle("Line snapped! Missed it.");
+        }
+    }
+
+    // --- GENERATIVE FISH & MUTATIONS SYSTEM (100+ Combinations) ---
+    function generateFish() {
+        // 1. Determine Rarity via weighted drop system
+        let rand = Math.random() * 100;
+        let selectedRarityKey = 'COMMON';
+        let cumulative = 0;
+        
+        // Sort rarities backwards to run up weight check safely
+        const keys = Object.keys(RARITIES);
+        for (let key of keys) {
+            cumulative += RARITIES[key].chance;
+            if (rand <= cumulative) {
+                selectedRarityKey = key;
+                break;
+            }
+        }
+        let rarity = RARITIES[selectedRarityKey];
+
+        // 2. Select Base Fish Template
+        let baseName = BASE_FISH[Math.floor(Math.random() * BASE_FISH.length)];
+
+        // 3. Roll Mutation Count (0 to 4 mutations possible)
+        let mutationCount = 0;
+        let mutRoll = Math.random();
+        if (mutRoll > 0.95) mutationCount = 4;
+        else if (mutRoll > 0.85) mutationCount = 3;
+        else if (mutRoll > 0.65) mutationCount = 2;
+        else if (mutRoll > 0.35) mutationCount = 1;
+
+        // Shuffle and pick unique mutations
+        let shuffledMut = [...MUTATIONS].sort(() => 0.5 - Math.random());
+        let activeMutations = shuffledMut.slice(0, mutationCount);
+
+        // 4. Calculate Financial Value formula
+        let baseValue = 10 + Math.floor(Math.random() * 15); // $10 - $25 base
+        let flatAddition = 0;
+        let mutationMultiplier = 1.0;
+
+        activeMutations.forEach(m => {
+            flatAddition += m.valueAdd;
+            mutationMultiplier *= m.mult;
+        });
+
+        let finalValue = Math.floor((baseValue + flatAddition) * rarity.mult * mutationMultiplier);
+
+        // 5. Construct Final Structural Fish Name Display
+        let mutationPrefix = activeMutations.map(m => m.name).join("-");
+        let fullName = mutationPrefix ? `${mutationPrefix} ${baseName}` : baseName;
+
+        // Save generated capture structure globally
+        generatedCatch = {
+            name: fullName,
+            rarityKey: selectedRarityKey,
+            value: finalValue,
+            mutationCount: mutationCount,
+            mutationsList: activeMutations.map(m => m.name).join(", ") || "None"
+        };
+
+        // Render Catch Dialog View overlay
+        const modal = document.getElementById('catch-modal');
+        const rTag = document.getElementById('catch-rarity');
+        
+        rTag.innerText = rarity.name;
+        rTag.style.backgroundColor = rarity.color;
+        document.getElementById('catch-name').innerText = fullName;
+        document.getElementById('catch-mutations').innerText = `Mutations (${mutationCount}): ${generatedCatch.mutationsList}`;
+        document.getElementById('catch-value').innerText = finalValue;
+        
+        modal.style.display = 'block';
+    }
+
+    function closeCatchModal() {
+        if (generatedCatch) {
+            gameState.money += generatedCatch.value;
+            gameState.catchLog.unshift(generatedCatch); // Add to beginning of log
+            if (gameState.catchLog.length > 20) gameState.catchLog.pop(); // Cap log sizing
+            
+            updateUI();
+        }
+        document.getElementById('catch-modal').style.display = 'none';
+        resetToIdle();
+    }
+
+    function resetToIdle(tickerMessage = "") {
+        gameState.status = 'idle';
+        actionBtn.innerText = "CAST";
+        actionBtn.className = "";
+        document.getElementById('minigame-container').style.display = 'none';
+        if (tickerMessage) {
+            // Quick alert alternative seamlessly integrated inside viewport panel
+            alert(tickerMessage);
+        }
+    }
+
+    // --- UI & TABS SYSTEM ---
+    function updateUI() {
+        document.getElementById('money-display').innerText = gameState.money;
+        document.getElementById('rod-display').innerText = RODS[gameState.currentRodIndex].name;
+        renderPanel();
+    }
+
+    function switchTab(tab) {
+        activeTab = tab;
+        document.querySelectorAll('.tab-btn').forEach((btn, idx) => {
+            btn.classList.toggle('active', (idx === 0 && tab === 'shop') || (idx === 1 && tab === 'log'));
+        });
+        renderPanel();
+    }
+
+    function renderPanel() {
+        const container = document.getElementById('panel-content');
+        container.innerHTML = "";
+
+        if (activeTab === 'shop') {
+            // Render specialized Fishing Gear Store
+            RODS.forEach((rod, index) => {
+                if (index === 0) return; // Skip default starting tool
+                
+                let isOwned = index <= gameState.currentRodIndex;
+                let canAfford = gameState.money >= rod.cost;
+                
+                let itemDiv = document.createElement('div');
+                itemDiv.className = 'shop-item';
+                
+                let infoText = `<strong>${rod.name}</strong><br><span style="font-size:0.75rem; color:#aaa;">Reel Bar size: +${(rod.zoneSize - 18) * 5}% scale</span>`;
+                let actionItem = '';
+
+                if (isOwned) {
+                    actionItem = `<span style="color:#2ecc71; font-weight:bold; font-size:0.85rem;">Equipped</span>`;
+                } else {
+                    let nextUp = index === gameState.currentRodIndex + 1;
+                    if (nextUp) {
+                        actionItem = `<button class="buy-btn" ${!canAfford ? 'disabled' : ''} onclick="buyRod(${index}, ${rod.cost})">$${rod.cost}</button>`;
+                    } else {
+                        actionItem = `<span style="color:#7f8c8d; font-size:0.8rem;">Locked</span>`;
+                    }
+                }
+
+                itemDiv.innerHTML = `<div>${infoText}</div><div>${actionItem}</div>`;
+                container.appendChild(itemDiv);
+            });
+        } else {
+            // Render recent catches log index list
+            if (gameState.catchLog.length === 0) {
+                container.innerHTML = `<p style="color:#7f8c8d; text-align:center; padding-top:20px;">No fish caught yet. Cast your line!</p>`;
+                return;
+            }
+            gameState.catchLog.forEach(item => {
+                let logDiv = document.createElement('div');
+                logDiv.style.borderBottom = "1px solid #2c3e50";
+                logDiv.style.padding = "6px 0";
+                logDiv.style.display = "flex";
+                logDiv.style.justifyContent = "space-between";
+                
+                let color = RARITIES[item.rarityKey].color;
+                logDiv.innerHTML = `
+                    <div style="font-size:0.85rem;">
+                        <span style="color:${color}; font-weight:bold;">[${item.rarityKey[0]}]</span> ${item.name}
+                    </div>
+                    <div style="color:#fed330; font-size:0.85rem;">+$${item.value}</div>
+                `;
+                container.appendChild(logDiv);
+            });
+        }
+    }
+
+    function buyRod(index, cost) {
+        if (gameState.money >= cost) {
+            gameState.money -= cost;
+            gameState.currentRodIndex = index;
+            updateUI();
+        }
+    }
+
+    // Run Setup
+    updateUI();
+</script>
+</body>
+</html>
