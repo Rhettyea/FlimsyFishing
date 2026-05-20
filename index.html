@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mutation Dock Fishing</title>
+    <title>Mutation Dock Fishing & Index</title>
     <style>
         * {
             box-sizing: border-box;
@@ -50,37 +50,11 @@
         #scenery {
             flex: 1;
             position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
         }
-        #dock {
-            position: absolute;
-            bottom: 20%;
-            left: 0;
-            width: 40%;
-            height: 20px;
-            background: #8c7ae6;
-            border-bottom: 8px solid #482ff7;
-            border-radius: 0 5px 5px 0;
-        }
-        #fisherman {
-            position: absolute;
-            bottom: calc(20% + 20px);
-            left: 20px;
-            font-size: 2rem;
-        }
-        #water-effects {
-            position: absolute;
-            bottom: 0;
+        canvas {
             width: 100%;
-            height: 20%;
-            background: rgba(0, 206, 201, 0.4);
-            animation: ripple 2s infinite ease-in-out;
-        }
-        @keyframes ripple {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(5px); }
+            height: 100%;
+            display: block;
         }
 
         /* Interaction Central Button */
@@ -149,10 +123,10 @@
         /* Catch Display / Modals */
         .modal {
             position: absolute;
-            top: 15%;
+            top: 10%;
             left: 5%;
             width: 90%;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.93);
             border: 2px solid #fff;
             border-radius: 10px;
             padding: 15px;
@@ -175,14 +149,14 @@
         #nav-tabs {
             display: flex;
             background: #2c3e50;
-            height: 50px;
+            height: 45px;
         }
         .tab-btn {
             flex: 1;
             background: none;
             border: none;
             color: #bdc3c7;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: bold;
             cursor: pointer;
         }
@@ -192,14 +166,14 @@
             border-top: 3px solid #00cec9;
         }
         #panel-content {
-            height: 180px;
+            height: 200px;
             background: #1e272e;
             overflow-y: auto;
             padding: 10px;
             border-top: 2px solid #2c3e50;
         }
 
-        /* Shop Elements */
+        /* Shop & Grid Elements */
         .shop-item {
             display: flex;
             justify-content: space-between;
@@ -220,13 +194,27 @@
         }
         .buy-btn:disabled { background: #7f8c8d; }
 
-        /* Status Ticker */
-        #ticker {
-            font-size: 0.9rem;
-            color: #f1c40f;
+        .index-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+        }
+        .index-card {
+            background: #2f3640;
+            padding: 6px;
+            border-radius: 4px;
             text-align: center;
-            font-style: italic;
-            margin-top: 5px;
+            font-size: 0.75rem;
+            border: 1px solid #3d4654;
+        }
+        .index-card.discovered { background: #130f40; border-color: #00cec9; }
+        .index-title {
+            grid-column: span 3;
+            font-weight: bold;
+            color: #fdcb6e;
+            margin: 8px 0 4px 0;
+            font-size: 0.85rem;
+            border-bottom: 1px dashed #57606f;
         }
     </style>
 </head>
@@ -239,9 +227,7 @@
     </header>
 
     <div id="scenery">
-        <div id="fisherman">🥶🕺</div>
-        <div id="dock"></div>
-        <div id="water-effects"></div>
+        <canvas id="gameCanvas"></canvas>
         
         <button id="action-btn">CAST</button>
 
@@ -260,20 +246,24 @@
     </div>
 
     <div id="nav-tabs">
-        <button class="tab-btn active" onclick="switchTab('shop')">SHOP</button>
-        <button class="tab-btn" onclick="switchTab('log')">CATCH LOG</button>
+        <button class="tab-btn active" id="tab-shop" onclick="switchTab('shop')">SHOP</button>
+        <button class="tab-btn" id="tab-log" onclick="switchTab('log')">CATCH LOG</button>
+        <button class="tab-btn" id="tab-index" onclick="switchTab('index')">FISH INDEX</button>
     </div>
     <div id="panel-content">
         </div>
 </div>
 
 <script>
-    // --- GAME DATA ---
+    // --- GAME DATA STATE ---
     let gameState = {
         money: 0,
         currentRodIndex: 0,
         status: 'idle', // idle, waiting, biting, minigame
-        catchLog: []
+        catchLog: [],
+        // Index tracking system
+        discoveredFish: {},
+        discoveredMutations: {}
     };
 
     const RARITIES = {
@@ -308,15 +298,16 @@
         { name: "Void-Touched", valueAdd: 100, mult: 3.0 }
     ];
 
+    // Added visual parameters (color, length, lineOffset) for drawing the rods
     const RODS = [
-        { name: "Basic Twig", cost: 0, zoneSize: 18, speed: 2.5 },
-        { name: "Fiberglass Pole", cost: 150, zoneSize: 26, speed: 2.2 },
-        { name: "Carbon Fiber Reel", cost: 600, zoneSize: 34, speed: 1.8 },
-        { name: "Titanium Quantum Rod", cost: 2000, zoneSize: 45, speed: 1.5 },
-        { name: "Plasma Void Caster", cost: 7500, zoneSize: 60, speed: 1.1 }
+        { name: "Basic Twig", cost: 0, zoneSize: 18, speed: 2.5, color: "#cd84f1", length: 45, thick: 3 },
+        { name: "Fiberglass Pole", cost: 150, zoneSize: 26, speed: 2.2, color: "#ffb8b8", length: 55, thick: 4 },
+        { name: "Carbon Fiber Reel", cost: 600, zoneSize: 34, speed: 1.8, color: "#3d3d3d", length: 65, thick: 4.5 },
+        { name: "Titanium Quantum Rod", cost: 2000, zoneSize: 45, speed: 1.5, color: "#18dcff", length: 75, thick: 5 },
+        { name: "Plasma Void Caster", cost: 7500, zoneSize: 60, speed: 1.1, color: "#ff3838", length: 85, thick: 6 }
     ];
 
-    // --- MINIGAME VARIABLES ---
+    // --- MINIGAME LOGIC CONTAINER ---
     let minigameData = {
         indicatorPos: 0,
         direction: 1,
@@ -330,10 +321,129 @@
     let generatedCatch = null;
     let activeTab = 'shop';
 
-    // --- CORE LOGIC ---
+    // --- CANVAS ART RENDERING ENGINE ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+        drawScene();
+    }
+    window.addEventListener('resize', resizeCanvas);
+    setTimeout(resizeCanvas, 100);
+
+    function drawScene() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        let w = canvas.width;
+        let h = canvas.height;
+        let dockY = h * 0.75;
+        let dockWidth = w * 0.45;
+
+        // 1. Draw Dock Structure
+        ctx.fillStyle = "#8c7ae6";
+        ctx.fillRect(0, dockY, dockWidth, 20);
+        ctx.fillStyle = "#482ff7";
+        ctx.fillRect(0, dockY + 20, dockWidth, 8);
+
+        // 2. Draw Frozen Player Character Model
+        let pX = dockWidth - 50; 
+        let pY = dockY;
+
+        // Feet (Square Shape Block)
+        ctx.fillStyle = "#2c3e50";
+        ctx.fillRect(pX - 12, pY - 8, 8, 8); // Left foot
+        ctx.fillRect(pX + 4, pY - 8, 8, 8);  // Right foot
+
+        // Legs
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(pX - 8, pY - 8); ctx.lineTo(pX - 8, pY - 20); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pX + 8, pY - 8); ctx.lineTo(pX + 8, pY - 20); ctx.stroke();
+
+        // Body (Circle Shape)
+        ctx.fillStyle = "#3498db";
+        ctx.beginPath();
+        ctx.arc(pX, pY - 35, 16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#ffffff";
+        ctx.stroke();
+
+        // Head (Circle Shape) + Shivering Face detail
+        ctx.fillStyle = "#ffdd59";
+        ctx.beginPath();
+        ctx.arc(pX, pY - 62, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Ice cube freeze overlay effect
+        ctx.fillStyle = "rgba(0, 206, 201, 0.35)";
+        ctx.fillRect(pX - 18, pY - 78, 36, 70);
+        ctx.strokeStyle = "rgba(255,255,255,0.7)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(pX - 18, pY - 78, 36, 70);
+
+        // Hands (Square Shape blocks emerging outwards)
+        ctx.fillStyle = "#ffdd59";
+        ctx.fillRect(pX + 16, pY - 38, 8, 8);
+
+        // 3. Dynamic Fishing Rod Engine Model Drawing
+        let currentRod = RODS[gameState.currentRodIndex];
+        let rodOriginX = pX + 20;
+        let rodOriginY = pY - 34;
+        
+        // Angle pointing up and out rightwards
+        let angle = -Math.PI / 5; 
+        let tipX = rodOriginX + Math.cos(angle) * currentRod.length;
+        let tipY = rodOriginY + Math.sin(angle) * currentRod.length;
+
+        // Render Rod Pole line shaft
+        ctx.strokeStyle = currentRod.color;
+        ctx.lineWidth = currentRod.thick;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(rodOriginX, rodOriginY);
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+
+        // Handle structural design wrap
+        ctx.fillStyle = "#1e272e";
+        ctx.fillRect(rodOriginX - 2, rodOriginY - 2, 6, 6);
+
+        // 4. Fishing Line Rendering Configurations
+        ctx.strokeStyle = "rgba(236, 240, 241, 0.7)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+
+        if (gameState.status === 'waiting' || gameState.status === 'biting' || gameState.status === 'minigame') {
+            // Line cast deep down into water layer
+            let waterLineX = w * 0.75;
+            ctx.lineTo(waterLineX, h - 30);
+            ctx.stroke();
+
+            // Bobber Float Graphic element
+            ctx.fillStyle = gameState.status === 'biting' ? "#e74c3c" : "#ff7675";
+            ctx.beginPath();
+            // Splash ripple jitter if fish is actively biting
+            let jitter = gameState.status === 'biting' ? Math.sin(Date.now() * 0.05) * 4 : 0;
+            ctx.arc(waterLineX, (h - 30) + jitter, 5, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            // Line dangling passively straight downwards off rod tip
+            ctx.lineTo(tipX, tipY + 40);
+            ctx.stroke();
+        }
+    }
+
+    // Live continuous paint loops to support splash updates
+    setInterval(drawScene, 50);
+
+    // --- INTERACTIVE ACTIONS ENGINE ---
     const actionBtn = document.getElementById('action-btn');
     
-    // Combined touch/click utility for lag-free mobile response
     ['touchstart', 'mousedown'].forEach(evtType => {
         actionBtn.addEventListener(evtType, function(e) {
             e.preventDefault();
@@ -345,7 +455,6 @@
         if (gameState.status === 'idle') {
             startCasting();
         } else if (gameState.status === 'waiting') {
-            // Reeled early!
             clearTimeout(biteTimeout);
             resetToIdle("Reeled in too early!");
         } else if (gameState.status === 'biting') {
@@ -360,11 +469,8 @@
         actionBtn.innerText = "WAITING";
         actionBtn.className = "waiting";
         
-        // Random wait time between 1.5 and 4.5 seconds
         let waitTime = 1500 + Math.random() * 3000;
-        biteTimeout = setTimeout(() => {
-            triggerBite();
-        }, waitTime);
+        biteTimeout = setTimeout(() => { triggerBite(); }, waitTime);
     }
 
     function triggerBite() {
@@ -372,7 +478,6 @@
         actionBtn.innerText = "HOOK!";
         actionBtn.className = "biting";
 
-        // Give player 1.2 seconds to tap/click when it bites
         biteTimeout = setTimeout(() => {
             resetToIdle("The fish got away!");
         }, 1200);
@@ -384,15 +489,13 @@
         actionBtn.innerText = "PULL!";
         actionBtn.className = "";
 
-        // Setup Minigame Parameters based on Current Fishing Rod
         const currentRod = RODS[gameState.currentRodIndex];
         const minigameBar = document.getElementById('minigame-container');
         const targetZone = document.getElementById('target-zone');
         
         minigameBar.style.display = 'block';
         
-        // Determine random target zone position
-        let zoneWidth = currentRod.zoneSize; // Percentage width
+        let zoneWidth = currentRod.zoneSize;
         minigameData.targetStart = Math.random() * (100 - zoneWidth);
         minigameData.targetEnd = minigameData.targetStart + zoneWidth;
         
@@ -434,14 +537,12 @@
         }
     }
 
-    // --- GENERATIVE FISH & MUTATIONS SYSTEM (100+ Combinations) ---
+    // --- PROCEDURAL MUTATION GENERATOR & LOG INDEX SAVER ---
     function generateFish() {
-        // 1. Determine Rarity via weighted drop system
         let rand = Math.random() * 100;
         let selectedRarityKey = 'COMMON';
         let cumulative = 0;
         
-        // Sort rarities backwards to run up weight check safely
         const keys = Object.keys(RARITIES);
         for (let key of keys) {
             cumulative += RARITIES[key].chance;
@@ -451,11 +552,9 @@
             }
         }
         let rarity = RARITIES[selectedRarityKey];
-
-        // 2. Select Base Fish Template
         let baseName = BASE_FISH[Math.floor(Math.random() * BASE_FISH.length)];
 
-        // 3. Roll Mutation Count (0 to 4 mutations possible)
+        // Roll Mutation Count (0 to 4 mutations possible)
         let mutationCount = 0;
         let mutRoll = Math.random();
         if (mutRoll > 0.95) mutationCount = 4;
@@ -463,27 +562,27 @@
         else if (mutRoll > 0.65) mutationCount = 2;
         else if (mutRoll > 0.35) mutationCount = 1;
 
-        // Shuffle and pick unique mutations
         let shuffledMut = [...MUTATIONS].sort(() => 0.5 - Math.random());
         let activeMutations = shuffledMut.slice(0, mutationCount);
 
-        // 4. Calculate Financial Value formula
-        let baseValue = 10 + Math.floor(Math.random() * 15); // $10 - $25 base
+        let baseValue = 10 + Math.floor(Math.random() * 15);
         let flatAddition = 0;
         let mutationMultiplier = 1.0;
 
         activeMutations.forEach(m => {
             flatAddition += m.valueAdd;
             mutationMultiplier *= m.mult;
+            // Record Mutation directly into discover database logs
+            gameState.discoveredMutations[m.name] = true;
         });
 
-        let finalValue = Math.floor((baseValue + flatAddition) * rarity.mult * mutationMultiplier);
+        // Record Base Fish discovery status
+        gameState.discoveredFish[baseName] = true;
 
-        // 5. Construct Final Structural Fish Name Display
+        let finalValue = Math.floor((baseValue + flatAddition) * rarity.mult * mutationMultiplier);
         let mutationPrefix = activeMutations.map(m => m.name).join("-");
         let fullName = mutationPrefix ? `${mutationPrefix} ${baseName}` : baseName;
 
-        // Save generated capture structure globally
         generatedCatch = {
             name: fullName,
             rarityKey: selectedRarityKey,
@@ -492,7 +591,6 @@
             mutationsList: activeMutations.map(m => m.name).join(", ") || "None"
         };
 
-        // Render Catch Dialog View overlay
         const modal = document.getElementById('catch-modal');
         const rTag = document.getElementById('catch-rarity');
         
@@ -508,9 +606,8 @@
     function closeCatchModal() {
         if (generatedCatch) {
             gameState.money += generatedCatch.value;
-            gameState.catchLog.unshift(generatedCatch); // Add to beginning of log
-            if (gameState.catchLog.length > 20) gameState.catchLog.pop(); // Cap log sizing
-            
+            gameState.catchLog.unshift(generatedCatch);
+            if (gameState.catchLog.length > 20) gameState.catchLog.pop();
             updateUI();
         }
         document.getElementById('catch-modal').style.display = 'none';
@@ -522,13 +619,10 @@
         actionBtn.innerText = "CAST";
         actionBtn.className = "";
         document.getElementById('minigame-container').style.display = 'none';
-        if (tickerMessage) {
-            // Quick alert alternative seamlessly integrated inside viewport panel
-            alert(tickerMessage);
-        }
+        if (tickerMessage) { alert(tickerMessage); }
     }
 
-    // --- UI & TABS SYSTEM ---
+    // --- UI NAVIGATION & ENCYCLOPEDIA (FISH INDEX) DISPLAY PANELS ---
     function updateUI() {
         document.getElementById('money-display').innerText = gameState.money;
         document.getElementById('rod-display').innerText = RODS[gameState.currentRodIndex].name;
@@ -537,9 +631,9 @@
 
     function switchTab(tab) {
         activeTab = tab;
-        document.querySelectorAll('.tab-btn').forEach((btn, idx) => {
-            btn.classList.toggle('active', (idx === 0 && tab === 'shop') || (idx === 1 && tab === 'log'));
-        });
+        document.getElementById('tab-shop').classList.toggle('active', tab === 'shop');
+        document.getElementById('tab-log').classList.toggle('active', tab === 'log');
+        document.getElementById('tab-index').classList.toggle('active', tab === 'index');
         renderPanel();
     }
 
@@ -548,35 +642,30 @@
         container.innerHTML = "";
 
         if (activeTab === 'shop') {
-            // Render specialized Fishing Gear Store
             RODS.forEach((rod, index) => {
-                if (index === 0) return; // Skip default starting tool
-                
+                if (index === 0) return;
                 let isOwned = index <= gameState.currentRodIndex;
                 let canAfford = gameState.money >= rod.cost;
                 
                 let itemDiv = document.createElement('div');
                 itemDiv.className = 'shop-item';
-                
-                let infoText = `<strong>${rod.name}</strong><br><span style="font-size:0.75rem; color:#aaa;">Reel Bar size: +${(rod.zoneSize - 18) * 5}% scale</span>`;
+                let infoText = `<strong>${rod.name}</strong><br><span style="font-size:0.75rem; color:#aaa;">Reel Bar Catch Window: +${(rod.zoneSize - 18) * 5}% scale</span>`;
                 let actionItem = '';
 
                 if (isOwned) {
                     actionItem = `<span style="color:#2ecc71; font-weight:bold; font-size:0.85rem;">Equipped</span>`;
                 } else {
-                    let nextUp = index === gameState.currentRodIndex + 1;
-                    if (nextUp) {
+                    if (index === gameState.currentRodIndex + 1) {
                         actionItem = `<button class="buy-btn" ${!canAfford ? 'disabled' : ''} onclick="buyRod(${index}, ${rod.cost})">$${rod.cost}</button>`;
                     } else {
                         actionItem = `<span style="color:#7f8c8d; font-size:0.8rem;">Locked</span>`;
                     }
                 }
-
                 itemDiv.innerHTML = `<div>${infoText}</div><div>${actionItem}</div>`;
                 container.appendChild(itemDiv);
             });
-        } else {
-            // Render recent catches log index list
+
+        } else if (activeTab === 'log') {
             if (gameState.catchLog.length === 0) {
                 container.innerHTML = `<p style="color:#7f8c8d; text-align:center; padding-top:20px;">No fish caught yet. Cast your line!</p>`;
                 return;
@@ -597,6 +686,41 @@
                 `;
                 container.appendChild(logDiv);
             });
+
+        } else if (activeTab === 'index') {
+            // Render comprehensive global Discovery Ledger
+            let indexWrapper = document.createElement('div');
+            indexWrapper.className = 'index-grid';
+
+            // Base Species Tracker Section
+            let title1 = document.createElement('div');
+            title1.className = 'index-title';
+            title1.innerText = "BASE SPECIES DISCOVERED";
+            indexWrapper.appendChild(title1);
+
+            BASE_FISH.forEach(fish => {
+                let card = document.createElement('div');
+                let found = gameState.discoveredFish[fish];
+                card.className = `index-card ${found ? 'discovered' : ''}`;
+                card.innerText = found ? fish : "???";
+                indexWrapper.appendChild(card);
+            });
+
+            // Mutation Variations Tracker Section
+            let title2 = document.createElement('div');
+            title2.className = 'index-title';
+            title2.innerText = "MUTATION GENES ISOLATED";
+            indexWrapper.appendChild(title2);
+
+            MUTATIONS.forEach(mut => {
+                let card = document.createElement('div');
+                let found = gameState.discoveredMutations[mut.name];
+                card.className = `index-card ${found ? 'discovered' : ''}`;
+                card.innerText = found ? mut.name : "???";
+                indexWrapper.appendChild(card);
+            });
+
+            container.appendChild(indexWrapper);
         }
     }
 
@@ -608,7 +732,7 @@
         }
     }
 
-    // Run Setup
+    // Run Startup Execution Loops
     updateUI();
 </script>
 </body>
