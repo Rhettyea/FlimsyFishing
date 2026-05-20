@@ -57,19 +57,18 @@
             display: block;
         }
 
-        /* Interaction Central Button */
+        /* Action Button Moved to Right Edge */
         #action-btn {
             position: absolute;
             bottom: 25%;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 90px;
-            height: 90px;
+            right: 20px; /* Shifted to the right side */
+            width: 85px;
+            height: 85px;
             border-radius: 50%;
             border: 4px solid #fff;
             background: #ff7675;
             color: white;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: bold;
             box-shadow: 0 6px 0 #d63031, 0 10px 20px rgba(0,0,0,0.3);
             cursor: pointer;
@@ -80,15 +79,15 @@
             z-index: 5;
         }
         #action-btn:active {
-            transform: translateX(-50%) translateY(4px);
+            transform: translateY(4px);
             box-shadow: 0 2px 0 #d63031, 0 5px 10px rgba(0,0,0,0.3);
         }
         #action-btn.waiting { background: #fdcb6e; box-shadow: 0 6px 0 #e17055; }
         #action-btn.biting { background: #2ecc71; box-shadow: 0 6px 0 #27ae60; animation: pulse 0.4s infinite; }
         @keyframes pulse {
-            0% { transform: translateX(-50%) scale(1); }
-            50% { transform: translateX(-50%) scale(1.1); }
-            100% { transform: translateX(-50%) scale(1); }
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
         }
 
         /* Minigame Bar */
@@ -118,6 +117,29 @@
             background: #ff7675;
             box-shadow: 0 0 5px #000;
             left: 0;
+        }
+
+        /* In-Game Feedback Alert Text */
+        #game-toast {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(231, 76, 60, 0.9);
+            color: white;
+            padding: 8px 20px;
+            font-weight: bold;
+            border-radius: 20px;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 15;
+            animation: bounceIn 0.3s ease;
+        }
+        @keyframes bounceIn {
+            0% { transform: translateX(-50%) scale(0.7); opacity: 0; }
+            80% { transform: translateX(-50%) scale(1.1); }
+            100% { transform: translateX(-50%) scale(1); opacity: 1; }
         }
 
         /* Catch Display / Modals */
@@ -231,6 +253,8 @@
         
         <button id="action-btn">CAST</button>
 
+        <div id="game-toast">Missed!</div>
+
         <div id="minigame-container">
             <div id="target-zone"></div>
             <div id="indicator"></div>
@@ -250,8 +274,7 @@
         <button class="tab-btn" id="tab-log" onclick="switchTab('log')">CATCH LOG</button>
         <button class="tab-btn" id="tab-index" onclick="switchTab('index')">FISH INDEX</button>
     </div>
-    <div id="panel-content">
-        </div>
+    <div id="panel-content"></div>
 </div>
 
 <script>
@@ -259,9 +282,8 @@
     let gameState = {
         money: 0,
         currentRodIndex: 0,
-        status: 'idle', // idle, waiting, biting, minigame
+        status: 'idle',
         catchLog: [],
-        // Index tracking system
         discoveredFish: {},
         discoveredMutations: {}
     };
@@ -298,30 +320,30 @@
         { name: "Void-Touched", valueAdd: 100, mult: 3.0 }
     ];
 
-    // Added visual parameters (color, length, lineOffset) for drawing the rods
+    // MODIFIED MINIGAME DIFFICULTY: zoneSizes made much larger, indicator speeds halved
     const RODS = [
-        { name: "Basic Twig", cost: 0, zoneSize: 18, speed: 2.5, color: "#cd84f1", length: 45, thick: 3 },
-        { name: "Fiberglass Pole", cost: 150, zoneSize: 26, speed: 2.2, color: "#ffb8b8", length: 55, thick: 4 },
-        { name: "Carbon Fiber Reel", cost: 600, zoneSize: 34, speed: 1.8, color: "#3d3d3d", length: 65, thick: 4.5 },
-        { name: "Titanium Quantum Rod", cost: 2000, zoneSize: 45, speed: 1.5, color: "#18dcff", length: 75, thick: 5 },
-        { name: "Plasma Void Caster", cost: 7500, zoneSize: 60, speed: 1.1, color: "#ff3838", length: 85, thick: 6 }
+        { name: "Basic Twig", cost: 0, zoneSize: 35, speed: 1.2, color: "#cd84f1", length: 45, thick: 3 },
+        { name: "Fiberglass Pole", cost: 150, zoneSize: 48, speed: 1.0, color: "#ffb8b8", length: 55, thick: 4 },
+        { name: "Carbon Fiber Reel", cost: 600, zoneSize: 60, speed: 0.8, color: "#3d3d3d", length: 65, thick: 4.5 },
+        { name: "Titanium Quantum Rod", cost: 2000, zoneSize: 75, speed: 0.6, color: "#18dcff", length: 75, thick: 5 },
+        { name: "Plasma Void Caster", cost: 7500, zoneSize: 90, speed: 0.4, color: "#ff3838", length: 85, thick: 6 }
     ];
 
-    // --- MINIGAME LOGIC CONTAINER ---
     let minigameData = {
         indicatorPos: 0,
         direction: 1,
         targetStart: 0,
         targetEnd: 0,
-        speed: 2,
+        speed: 1,
         animationFrame: null
     };
     
     let biteTimeout = null;
+    let toastTimeout = null;
     let generatedCatch = null;
     let activeTab = 'shop';
 
-    // --- CANVAS ART RENDERING ENGINE ---
+    // --- CANVAS GRAPHICS RENDERING ---
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
@@ -341,104 +363,75 @@
         let dockY = h * 0.75;
         let dockWidth = w * 0.45;
 
-        // 1. Draw Dock Structure
+        // Draw Dock
         ctx.fillStyle = "#8c7ae6";
         ctx.fillRect(0, dockY, dockWidth, 20);
         ctx.fillStyle = "#482ff7";
         ctx.fillRect(0, dockY + 20, dockWidth, 8);
 
-        // 2. Draw Frozen Player Character Model
-        let pX = dockWidth - 50; 
+        // Draw Player Character Model: Human Stick Figure Standing Regularly
+        let pX = dockWidth - 60; 
         let pY = dockY;
 
-        // Feet (Square Shape Block)
-        ctx.fillStyle = "#2c3e50";
-        ctx.fillRect(pX - 12, pY - 8, 8, 8); // Left foot
-        ctx.fillRect(pX + 4, pY - 8, 8, 8);  // Right foot
-
-        // Legs
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(pX - 8, pY - 8); ctx.lineTo(pX - 8, pY - 20); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(pX + 8, pY - 8); ctx.lineTo(pX + 8, pY - 20); ctx.stroke();
+        ctx.lineCap = "round";
 
-        // Body (Circle Shape)
-        ctx.fillStyle = "#3498db";
-        ctx.beginPath();
-        ctx.arc(pX, pY - 35, 16, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "#ffffff";
-        ctx.stroke();
+        // Legs (Standing Straight)
+        ctx.beginPath(); ctx.moveTo(pX - 6, pY); ctx.lineTo(pX - 6, pY - 24); ctx.stroke(); // Left leg
+        ctx.beginPath(); ctx.moveTo(pX + 6, pY); ctx.lineTo(pX + 6, pY - 24); ctx.stroke(); // Right leg
 
-        // Head (Circle Shape) + Shivering Face detail
+        // Main Spine/Torso Line
+        ctx.beginPath(); ctx.moveTo(pX, pY - 24); ctx.lineTo(pX, pY - 56); ctx.stroke();
+
+        // Arms (Reaching outwards to hold rod)
+        ctx.beginPath(); ctx.moveTo(pX, pY - 48); ctx.lineTo(pX + 16, pY - 42); ctx.stroke();
+
+        // Head (Circle)
         ctx.fillStyle = "#ffdd59";
         ctx.beginPath();
-        ctx.arc(pX, pY - 62, 12, 0, Math.PI * 2);
+        ctx.arc(pX, pY - 66, 10, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
-        
-        // Ice cube freeze overlay effect
-        ctx.fillStyle = "rgba(0, 206, 201, 0.35)";
-        ctx.fillRect(pX - 18, pY - 78, 36, 70);
-        ctx.strokeStyle = "rgba(255,255,255,0.7)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(pX - 18, pY - 78, 36, 70);
 
-        // Hands (Square Shape blocks emerging outwards)
-        ctx.fillStyle = "#ffdd59";
-        ctx.fillRect(pX + 16, pY - 38, 8, 8);
-
-        // 3. Dynamic Fishing Rod Engine Model Drawing
+        // Dynamic Fishing Rod Model
         let currentRod = RODS[gameState.currentRodIndex];
-        let rodOriginX = pX + 20;
-        let rodOriginY = pY - 34;
+        let rodOriginX = pX + 14;
+        let rodOriginY = pY - 42;
         
-        // Angle pointing up and out rightwards
-        let angle = -Math.PI / 5; 
+        let angle = -Math.PI / 6; 
         let tipX = rodOriginX + Math.cos(angle) * currentRod.length;
         let tipY = rodOriginY + Math.sin(angle) * currentRod.length;
 
-        // Render Rod Pole line shaft
         ctx.strokeStyle = currentRod.color;
         ctx.lineWidth = currentRod.thick;
-        ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(rodOriginX, rodOriginY);
         ctx.lineTo(tipX, tipY);
         ctx.stroke();
 
-        // Handle structural design wrap
-        ctx.fillStyle = "#1e272e";
-        ctx.fillRect(rodOriginX - 2, rodOriginY - 2, 6, 6);
-
-        // 4. Fishing Line Rendering Configurations
+        // Fishing Line Configuration
         ctx.strokeStyle = "rgba(236, 240, 241, 0.7)";
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.moveTo(tipX, tipY);
 
         if (gameState.status === 'waiting' || gameState.status === 'biting' || gameState.status === 'minigame') {
-            // Line cast deep down into water layer
-            let waterLineX = w * 0.75;
+            let waterLineX = w * 0.72;
             ctx.lineTo(waterLineX, h - 30);
             ctx.stroke();
 
-            // Bobber Float Graphic element
             ctx.fillStyle = gameState.status === 'biting' ? "#e74c3c" : "#ff7675";
             ctx.beginPath();
-            // Splash ripple jitter if fish is actively biting
             let jitter = gameState.status === 'biting' ? Math.sin(Date.now() * 0.05) * 4 : 0;
             ctx.arc(waterLineX, (h - 30) + jitter, 5, 0, Math.PI * 2);
             ctx.fill();
         } else {
-            // Line dangling passively straight downwards off rod tip
-            ctx.lineTo(tipX, tipY + 40);
+            ctx.lineTo(tipX, tipY + 45);
             ctx.stroke();
         }
     }
 
-    // Live continuous paint loops to support splash updates
     setInterval(drawScene, 50);
 
     // --- INTERACTIVE ACTIONS ENGINE ---
@@ -451,12 +444,24 @@
         });
     });
 
+    // In-game text feed flash engine (Replaces alert boxes)
+    function showTextFeedback(text) {
+        const toast = document.getElementById('game-toast');
+        toast.innerText = text;
+        toast.style.display = 'block';
+        
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            toast.style.display = 'none';
+        }, 1500);
+    }
+
     function handleAction() {
         if (gameState.status === 'idle') {
             startCasting();
         } else if (gameState.status === 'waiting') {
             clearTimeout(biteTimeout);
-            resetToIdle("Reeled in too early!");
+            resetToIdle("Missed!"); // Text prompt instead of alert
         } else if (gameState.status === 'biting') {
             startMinigame();
         } else if (gameState.status === 'minigame') {
@@ -469,7 +474,7 @@
         actionBtn.innerText = "WAITING";
         actionBtn.className = "waiting";
         
-        let waitTime = 1500 + Math.random() * 3000;
+        let waitTime = 1200 + Math.random() * 2500;
         biteTimeout = setTimeout(() => { triggerBite(); }, waitTime);
     }
 
@@ -479,8 +484,8 @@
         actionBtn.className = "biting";
 
         biteTimeout = setTimeout(() => {
-            resetToIdle("The fish got away!");
-        }, 1200);
+            resetToIdle("Missed!");
+        }, 1500); // More time allowed to react
     }
 
     function startMinigame() {
@@ -533,11 +538,11 @@
         if (pos >= minigameData.targetStart && pos <= minigameData.targetEnd) {
             generateFish();
         } else {
-            resetToIdle("Line snapped! Missed it.");
+            resetToIdle("Missed!");
         }
     }
 
-    // --- PROCEDURAL MUTATION GENERATOR & LOG INDEX SAVER ---
+    // --- PROCEDURAL GENERATOR ---
     function generateFish() {
         let rand = Math.random() * 100;
         let selectedRarityKey = 'COMMON';
@@ -554,7 +559,6 @@
         let rarity = RARITIES[selectedRarityKey];
         let baseName = BASE_FISH[Math.floor(Math.random() * BASE_FISH.length)];
 
-        // Roll Mutation Count (0 to 4 mutations possible)
         let mutationCount = 0;
         let mutRoll = Math.random();
         if (mutRoll > 0.95) mutationCount = 4;
@@ -572,11 +576,9 @@
         activeMutations.forEach(m => {
             flatAddition += m.valueAdd;
             mutationMultiplier *= m.mult;
-            // Record Mutation directly into discover database logs
             gameState.discoveredMutations[m.name] = true;
         });
 
-        // Record Base Fish discovery status
         gameState.discoveredFish[baseName] = true;
 
         let finalValue = Math.floor((baseValue + flatAddition) * rarity.mult * mutationMultiplier);
@@ -614,15 +616,17 @@
         resetToIdle();
     }
 
-    function resetToIdle(tickerMessage = "") {
+    function resetToIdle(textFeedback = "") {
         gameState.status = 'idle';
         actionBtn.innerText = "CAST";
         actionBtn.className = "";
         document.getElementById('minigame-container').style.display = 'none';
-        if (tickerMessage) { alert(tickerMessage); }
+        if (textFeedback) {
+            showTextFeedback(textFeedback);
+        }
     }
 
-    // --- UI NAVIGATION & ENCYCLOPEDIA (FISH INDEX) DISPLAY PANELS ---
+    // --- UI NAVIGATION & TABS ---
     function updateUI() {
         document.getElementById('money-display').innerText = gameState.money;
         document.getElementById('rod-display').innerText = RODS[gameState.currentRodIndex].name;
@@ -649,7 +653,7 @@
                 
                 let itemDiv = document.createElement('div');
                 itemDiv.className = 'shop-item';
-                let infoText = `<strong>${rod.name}</strong><br><span style="font-size:0.75rem; color:#aaa;">Reel Bar Catch Window: +${(rod.zoneSize - 18) * 5}% scale</span>`;
+                let infoText = `<strong>${rod.name}</strong><br><span style="font-size:0.75rem; color:#aaa;">Green Target Window: Size Upgraded</span>`;
                 let actionItem = '';
 
                 if (isOwned) {
@@ -667,7 +671,7 @@
 
         } else if (activeTab === 'log') {
             if (gameState.catchLog.length === 0) {
-                container.innerHTML = `<p style="color:#7f8c8d; text-align:center; padding-top:20px;">No fish caught yet. Cast your line!</p>`;
+                container.innerHTML = `<p style="color:#7f8c8d; text-align:center; padding-top:20px;">No fish caught yet.</p>`;
                 return;
             }
             gameState.catchLog.forEach(item => {
@@ -688,11 +692,9 @@
             });
 
         } else if (activeTab === 'index') {
-            // Render comprehensive global Discovery Ledger
             let indexWrapper = document.createElement('div');
             indexWrapper.className = 'index-grid';
 
-            // Base Species Tracker Section
             let title1 = document.createElement('div');
             title1.className = 'index-title';
             title1.innerText = "BASE SPECIES DISCOVERED";
@@ -706,7 +708,6 @@
                 indexWrapper.appendChild(card);
             });
 
-            // Mutation Variations Tracker Section
             let title2 = document.createElement('div');
             title2.className = 'index-title';
             title2.innerText = "MUTATION GENES ISOLATED";
@@ -732,8 +733,8 @@
         }
     }
 
-    // Run Startup Execution Loops
     updateUI();
 </script>
 </body>
+</html>
 </html>
