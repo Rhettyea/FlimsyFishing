@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FlimsyFishing</title>
+    <title>Mutation Dock Fishing & Index</title>
     <style>
         * {
             box-sizing: border-box;
@@ -57,11 +57,11 @@
             display: block;
         }
 
-        /* Action Button Moved to Right Edge */
+        /* Action Button */
         #action-btn {
             position: absolute;
             bottom: 25%;
-            right: 20px; /* Shifted to the right side */
+            right: 20px;
             width: 85px;
             height: 85px;
             border-radius: 50%;
@@ -320,7 +320,6 @@
         { name: "Void-Touched", valueAdd: 100, mult: 3.0 }
     ];
 
-    // MODIFIED MINIGAME DIFFICULTY: zoneSizes made much larger, indicator speeds halved
     const RODS = [
         { name: "Basic Twig", cost: 0, zoneSize: 35, speed: 1.2, color: "#cd84f1", length: 45, thick: 3 },
         { name: "Fiberglass Pole", cost: 150, zoneSize: 48, speed: 1.0, color: "#ffb8b8", length: 55, thick: 4 },
@@ -369,7 +368,7 @@
         ctx.fillStyle = "#482ff7";
         ctx.fillRect(0, dockY + 20, dockWidth, 8);
 
-        // Draw Player Character Model: Human Stick Figure Standing Regularly
+        // Draw Player Character Model: Human Stick Figure
         let pX = dockWidth - 60; 
         let pY = dockY;
 
@@ -377,24 +376,24 @@
         ctx.lineWidth = 3;
         ctx.lineCap = "round";
 
-        // Legs (Standing Straight)
-        ctx.beginPath(); ctx.moveTo(pX - 6, pY); ctx.lineTo(pX - 6, pY - 24); ctx.stroke(); // Left leg
-        ctx.beginPath(); ctx.moveTo(pX + 6, pY); ctx.lineTo(pX + 6, pY - 24); ctx.stroke(); // Right leg
+        // Legs
+        ctx.beginPath(); ctx.moveTo(pX - 6, pY); ctx.lineTo(pX - 6, pY - 24); ctx.stroke(); 
+        ctx.beginPath(); ctx.moveTo(pX + 6, pY); ctx.lineTo(pX + 6, pY - 24); ctx.stroke(); 
 
         // Main Spine/Torso Line
         ctx.beginPath(); ctx.moveTo(pX, pY - 24); ctx.lineTo(pX, pY - 56); ctx.stroke();
 
-        // Arms (Reaching outwards to hold rod)
+        // Arms
         ctx.beginPath(); ctx.moveTo(pX, pY - 48); ctx.lineTo(pX + 16, pY - 42); ctx.stroke();
 
-        // Head (Circle)
+        // Head
         ctx.fillStyle = "#ffdd59";
         ctx.beginPath();
         ctx.arc(pX, pY - 66, 10, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
-        // Dynamic Fishing Rod Model
+        // Dynamic Fishing Rod Model (Tracks gameState.currentRodIndex safely)
         let currentRod = RODS[gameState.currentRodIndex];
         let rodOriginX = pX + 14;
         let rodOriginY = pY - 42;
@@ -444,7 +443,6 @@
         });
     });
 
-    // In-game text feed flash engine (Replaces alert boxes)
     function showTextFeedback(text) {
         const toast = document.getElementById('game-toast');
         toast.innerText = text;
@@ -461,7 +459,7 @@
             startCasting();
         } else if (gameState.status === 'waiting') {
             clearTimeout(biteTimeout);
-            resetToIdle("Missed!"); // Text prompt instead of alert
+            resetToIdle("Missed!");
         } else if (gameState.status === 'biting') {
             startMinigame();
         } else if (gameState.status === 'minigame') {
@@ -485,7 +483,7 @@
 
         biteTimeout = setTimeout(() => {
             resetToIdle("Missed!");
-        }, 1500); // More time allowed to react
+        }, 1500);
     }
 
     function startMinigame() {
@@ -494,6 +492,7 @@
         actionBtn.innerText = "PULL!";
         actionBtn.className = "";
 
+        // Dynamically reads the freshly purchased rod's ease adjustments immediately
         const currentRod = RODS[gameState.currentRodIndex];
         const minigameBar = document.getElementById('minigame-container');
         const targetZone = document.getElementById('target-zone');
@@ -535,6 +534,7 @@
         document.getElementById('minigame-container').style.display = 'none';
 
         let pos = minigameData.indicatorPos;
+        // Accurate float comparison bounding verification checks
         if (pos >= minigameData.targetStart && pos <= minigameData.targetEnd) {
             generateFish();
         } else {
@@ -608,8 +608,11 @@
     function closeCatchModal() {
         if (generatedCatch) {
             gameState.money += generatedCatch.value;
-            gameState.catchLog.unshift(generatedCatch);
+            
+            gameState.catchLog.unshift({...generatedCatch});
             if (gameState.catchLog.length > 20) gameState.catchLog.pop();
+            
+            generatedCatch = null; 
             updateUI();
         }
         document.getElementById('catch-modal').style.display = 'none';
@@ -730,11 +733,11 @@
             gameState.money -= cost;
             gameState.currentRodIndex = index;
             updateUI();
+            drawScene(); // Forces instant visual update to rendering layers
         }
     }
 
     updateUI();
 </script>
 </body>
-</html>
 </html>
